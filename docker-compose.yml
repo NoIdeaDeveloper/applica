@@ -1,0 +1,12 @@
+services:
+  applica:
+    build: .
+    container_name: applica
+    ports:
+      - "8000:8000"
+    volumes:
+      - applica-data:/data
+    restart: unless-stopped
+
+volumes:
+  applica-data:
