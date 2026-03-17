@@ -56,7 +56,7 @@ async function navigate() {
             a.classList.toggle("active", a.getAttribute("href") === "#" + hash);
         });
     } catch (e) {
-        app.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+        app.innerHTML = `<div class="error-msg">Error: ${esc(e.message)}</div>`;
     }
 }
 
