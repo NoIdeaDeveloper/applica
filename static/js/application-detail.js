@@ -149,7 +149,7 @@ const ApplicationDetail = {
                 </div>
                 <div class="detail-field">
                     <label>Job Posting</label>
-                    ${app.url ? `<a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a>` : "<span>—</span>"}
+                    ${app.url && /^https?:\/\//i.test(app.url) ? `<a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a>` : app.url ? `<span>${esc(app.url)}</span>` : "<span>—</span>"}
                 </div>
                 <div class="detail-field">
                     <label>Resume</label>
@@ -301,9 +301,13 @@ const ApplicationDetail = {
             document.getElementById("cn-cancel-btn")?.addEventListener("click", () => renderCompanyNotes(notes, false));
             document.getElementById("cn-save-btn")?.addEventListener("click", async () => {
                 const updated = document.getElementById("cn-textarea").value;
-                await API.upsertCompanyNotes(company, updated);
-                showToast("Company notes saved.");
-                renderCompanyNotes(updated, false);
+                try {
+                    await API.upsertCompanyNotes(company, updated);
+                    showToast("Company notes saved.");
+                    renderCompanyNotes(updated, false);
+                } catch {
+                    showToast("Failed to save company notes.", "error");
+                }
             });
         };
 
@@ -311,22 +315,32 @@ const ApplicationDetail = {
             .then(data => renderCompanyNotes(data.notes || ""))
             .catch(() => renderCompanyNotes("", false));
 
-        document.getElementById("archive-btn")?.addEventListener("click", async () => {
-            await API.archiveApplication(id);
-            showToast("Application archived.");
-            navigate();
-        });
+        // Helper: run an async API call, navigate on success, show error toast on failure.
+        // If successMsg is provided it is shown before navigating.
+        const apiAction = async (fn, errorMsg, successMsg) => {
+            try {
+                await fn();
+                if (successMsg) showToast(successMsg);
+                navigate();
+            } catch {
+                showToast(errorMsg, "error");
+            }
+        };
 
-        document.getElementById("restore-btn")?.addEventListener("click", async () => {
-            await API.restoreApplication(id);
-            showToast("Application restored.");
-            navigate();
-        });
+        document.getElementById("archive-btn")?.addEventListener("click", () =>
+            apiAction(() => API.archiveApplication(id), "Failed to archive application.", "Application archived."));
+
+        document.getElementById("restore-btn")?.addEventListener("click", () =>
+            apiAction(() => API.restoreApplication(id), "Failed to restore application.", "Application restored."));
 
         document.getElementById("delete-btn")?.addEventListener("click", async () => {
             if (confirm("Permanently delete this application and all its data?")) {
-                await API.deleteApplication(id);
-                location.hash = "/applications?archived=1";
+                try {
+                    await API.deleteApplication(id);
+                    location.hash = "/applications?archived=1";
+                } catch {
+                    showToast("Failed to delete application.", "error");
+                }
             }
         });
 
@@ -334,23 +348,24 @@ const ApplicationDetail = {
             e.preventDefault();
             const form = e.target;
             const notesEl = document.querySelector("textarea[form='round-form']");
-            await API.createInterviewRound({
-                application_id: parseInt(id),
-                stage: form.stage.value,
-                date: form.date.value || null,
-                interviewer: form.interviewer.value || null,
-                outcome: form.outcome.value,
-                notes: notesEl?.value || null,
-            });
-            showToast("Interview round added.");
-            navigate();
+            apiAction(
+                () => API.createInterviewRound({
+                    application_id: parseInt(id),
+                    stage: form.stage.value,
+                    date: form.date.value || null,
+                    interviewer: form.interviewer.value || null,
+                    outcome: form.outcome.value,
+                    notes: notesEl?.value || null,
+                }),
+                "Failed to add interview round.",
+                "Interview round added.",
+            );
         });
 
         document.querySelectorAll(".delete-round").forEach(btn => {
             btn.addEventListener("click", async () => {
                 if (!confirm("Delete this interview round?")) return;
-                await API.deleteInterviewRound(btn.dataset.id);
-                navigate();
+                apiAction(() => API.deleteInterviewRound(btn.dataset.id), "Failed to delete interview round.");
             });
         });
 
@@ -358,18 +373,20 @@ const ApplicationDetail = {
             e.preventDefault();
             const form = e.target;
             const notesEl = document.querySelector("textarea[form='followup-form']");
-            await API.createFollowup({
-                application_id: parseInt(id),
-                contact_name: form.contact_name.value || null,
-                contact_title: form.contact_title.value || null,
-                contact_email: form.contact_email.value || null,
-                date: form.date.value || null,
-                method: form.method.value,
-                direction: form.direction.value,
-                notes: notesEl?.value || null,
-            });
-            showToast("Follow-up added.");
-            navigate(); // Re-render
+            apiAction(
+                () => API.createFollowup({
+                    application_id: parseInt(id),
+                    contact_name: form.contact_name.value || null,
+                    contact_title: form.contact_title.value || null,
+                    contact_email: form.contact_email.value || null,
+                    date: form.date.value || null,
+                    method: form.method.value,
+                    direction: form.direction.value,
+                    notes: notesEl?.value || null,
+                }),
+                "Failed to add follow-up.",
+                "Follow-up added.",
+            );
         });
 
         document.getElementById("followups-list").addEventListener("click", async (e) => {
@@ -385,21 +402,22 @@ const ApplicationDetail = {
                 document.querySelector(`.followup-item[data-id="${fid}"]`).style.opacity = "";
             } else if (btn.classList.contains("save-followup-edit")) {
                 const editForm = document.getElementById(`edit-form-${fid}`);
-                await API.updateFollowup(fid, {
-                    contact_name: editForm.querySelector("[name=contact_name]").value || null,
-                    contact_title: editForm.querySelector("[name=contact_title]").value || null,
-                    contact_email: editForm.querySelector("[name=contact_email]").value || null,
-                    date: editForm.querySelector("[name=date]").value || null,
-                    method: editForm.querySelector("[name=method]").value,
-                    direction: editForm.querySelector("[name=direction]").value,
-                    notes: editForm.querySelector("[name=notes]").value || null,
-                });
-                showToast("Follow-up updated.");
-                navigate();
+                apiAction(
+                    () => API.updateFollowup(fid, {
+                        contact_name: editForm.querySelector("[name=contact_name]").value || null,
+                        contact_title: editForm.querySelector("[name=contact_title]").value || null,
+                        contact_email: editForm.querySelector("[name=contact_email]").value || null,
+                        date: editForm.querySelector("[name=date]").value || null,
+                        method: editForm.querySelector("[name=method]").value,
+                        direction: editForm.querySelector("[name=direction]").value,
+                        notes: editForm.querySelector("[name=notes]").value || null,
+                    }),
+                    "Failed to update follow-up.",
+                    "Follow-up updated.",
+                );
             } else if (btn.classList.contains("delete-followup")) {
                 if (!confirm("Delete this follow-up?")) return;
-                await API.deleteFollowup(fid);
-                navigate();
+                apiAction(() => API.deleteFollowup(fid), "Failed to delete follow-up.");
             }
         });
     }

@@ -90,19 +90,38 @@ def bulk_action(data: BulkAction):
             raise HTTPException(400, "Unknown action")
 
 
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"}
+
+
+_UPLOADS_REAL = None
+
+
+def _safe_upload_path(filename: str) -> str:
+    """Resolve path and verify it's inside UPLOADS_DIR (prevents path traversal)."""
+    global _UPLOADS_REAL
+    if _UPLOADS_REAL is None:
+        _UPLOADS_REAL = os.path.realpath(UPLOADS_DIR) + os.sep
+    resolved = os.path.realpath(os.path.join(UPLOADS_DIR, filename))
+    if not resolved.startswith(_UPLOADS_REAL):
+        raise HTTPException(400, "Invalid filename")
+    return resolved
+
+
 def _remove_file(filename: Optional[str]):
     if not filename:
         return
     try:
-        os.remove(os.path.join(UPLOADS_DIR, filename))
-    except FileNotFoundError:
+        os.remove(_safe_upload_path(filename))
+    except (FileNotFoundError, HTTPException):
         pass
 
 
 def _save_upload(app_id: int, file: UploadFile, file_type: str) -> str:
-    ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(415, f"File type '{ext or 'none'}' not allowed. Accepted: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
     filename = f"{app_id}_{file_type}{ext}"
-    filepath = os.path.join(UPLOADS_DIR, filename)
+    filepath = _safe_upload_path(filename)
     with open(filepath, "wb") as f:
         shutil.copyfileobj(file.file, f)
     return filename
@@ -112,10 +131,13 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 def _upload_file(app_id: int, file: UploadFile, file_type: str, path_field: str):
-    # Check size before writing to disk
-    contents = file.file.read()
-    if len(contents) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"File exceeds the 10 MB limit ({len(contents) // (1024*1024)} MB uploaded)")
+    # Check size in chunks to avoid loading the whole file into memory
+    size = 0
+    chunk_size = 1024 * 1024  # 1 MB
+    while chunk := file.file.read(chunk_size):
+        size += len(chunk)
+        if size > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "File exceeds the 10 MB limit")
     file.file.seek(0)
 
     with get_db() as db:
@@ -140,7 +162,7 @@ def _download_file(app_id: int, path_field: str, label: str):
         ).fetchone()
         if not row or not row[path_field]:
             raise HTTPException(404, f"No {label} uploaded")
-        filepath = os.path.join(UPLOADS_DIR, row[path_field])
+        filepath = _safe_upload_path(row[path_field])
         return FileResponse(filepath, filename=row[path_field])
 
 

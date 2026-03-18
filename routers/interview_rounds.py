@@ -49,7 +49,10 @@ def update_round(round_id: int, data: InterviewRoundUpdate):
     if data.outcome is not None and data.outcome not in VALID_OUTCOMES:
         raise HTTPException(400, "Invalid outcome.")
     with get_db() as db:
-        cursor = db.execute(
+        existing = db.execute("SELECT * FROM interview_rounds WHERE id = ?", (round_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Interview round not found")
+        db.execute(
             """UPDATE interview_rounds
                SET outcome = COALESCE(?, outcome),
                    notes = COALESCE(?, notes),
@@ -58,8 +61,7 @@ def update_round(round_id: int, data: InterviewRoundUpdate):
                WHERE id = ?""",
             (data.outcome, data.notes, data.interviewer, data.date, round_id),
         )
-        if cursor.rowcount == 0:
-            raise HTTPException(404, "Interview round not found")
+        touch_application(db, existing["application_id"])
         updated = db.execute("SELECT * FROM interview_rounds WHERE id = ?", (round_id,)).fetchone()
         return dict(updated)
 
@@ -67,6 +69,8 @@ def update_round(round_id: int, data: InterviewRoundUpdate):
 @router.delete("/interview-rounds/{round_id}", status_code=204)
 def delete_round(round_id: int):
     with get_db() as db:
-        cursor = db.execute("DELETE FROM interview_rounds WHERE id = ?", (round_id,))
-        if cursor.rowcount == 0:
+        row = db.execute("SELECT application_id FROM interview_rounds WHERE id = ?", (round_id,)).fetchone()
+        if not row:
             raise HTTPException(404, "Interview round not found")
+        db.execute("DELETE FROM interview_rounds WHERE id = ?", (round_id,))
+        touch_application(db, row["application_id"])

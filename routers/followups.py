@@ -63,6 +63,7 @@ def update_followup(followup_id: int, data: FollowupUpdate):
             (data.contact_name, data.contact_title, data.contact_email,
              data.date, data.method, data.direction, data.notes, followup_id),
         )
+        touch_application(db, row["application_id"])
         updated = db.execute("SELECT * FROM followups WHERE id = ?", (followup_id,)).fetchone()
         return dict(updated)
 
@@ -70,6 +71,8 @@ def update_followup(followup_id: int, data: FollowupUpdate):
 @router.delete("/followups/{followup_id}", status_code=204)
 def delete_followup(followup_id: int):
     with get_db() as db:
-        cursor = db.execute("DELETE FROM followups WHERE id = ?", (followup_id,))
-        if cursor.rowcount == 0:
+        row = db.execute("SELECT application_id FROM followups WHERE id = ?", (followup_id,)).fetchone()
+        if not row:
             raise HTTPException(404, "Follow-up not found")
+        db.execute("DELETE FROM followups WHERE id = ?", (followup_id,))
+        touch_application(db, row["application_id"])

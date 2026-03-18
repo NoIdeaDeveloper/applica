@@ -317,8 +317,12 @@ const Applications = {
             const status = bulkStatus.value;
             if (!ids.length) return;
             if (!status) { showToast("Select a status first.", "error"); return; }
-            await API.bulkAction({ ids, action: "update_status", status });
-            showToast(`Updated ${ids.length} application${ids.length > 1 ? "s" : ""}.`);
+            try {
+                await API.bulkAction({ ids, action: "update_status", status });
+                showToast(`Updated ${ids.length} application${ids.length > 1 ? "s" : ""}.`);
+            } catch {
+                showToast("Action failed. Please try again.", "error");
+            }
             bulkStatus.value = "";
             load();
         });
@@ -327,8 +331,12 @@ const Applications = {
             const ids = getSelected();
             if (!ids.length) return;
             if (!confirm(`Delete ${ids.length} application${ids.length > 1 ? "s" : ""} and all their data?`)) return;
-            await API.bulkAction({ ids, action: "delete" });
-            showToast(`Deleted ${ids.length} application${ids.length > 1 ? "s" : ""}.`);
+            try {
+                await API.bulkAction({ ids, action: "delete" });
+                showToast(`Deleted ${ids.length} application${ids.length > 1 ? "s" : ""}.`);
+            } catch {
+                showToast("Action failed. Please try again.", "error");
+            }
             load();
         });
 
@@ -349,7 +357,8 @@ const Applications = {
         // Export dropdown (only present in active view)
         const exportBtn = document.getElementById("export-btn");
         const exportMenu = document.getElementById("export-menu");
-        exportBtn?.addEventListener("click", (e) => {
+        if (exportBtn && exportMenu) {
+        exportBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             exportMenu.hidden = !exportMenu.hidden;
             if (!exportMenu.hidden) {
@@ -365,6 +374,7 @@ const Applications = {
             window.location.href = `/api/applications/export?${qs}`;
             exportMenu.hidden = true;
         });
+        } // end if (exportBtn && exportMenu)
 
         // CSV import
         const importInput = document.getElementById("import-input");
@@ -375,9 +385,16 @@ const Applications = {
             labelText.textContent = "Importing…";
             try {
                 const result = await API.importCSV(file);
-                const msg = `Imported ${result.imported} application${result.imported !== 1 ? "s" : ""}` +
-                    (result.skipped ? `, ${result.skipped} skipped` : "") + ".";
-                showToast(msg, result.skipped ? "error" : "success");
+                let msg, toastType;
+                if (result.imported === 0) {
+                    msg = `No new applications imported` + (result.skipped ? ` — ${result.skipped} row${result.skipped !== 1 ? "s" : ""} skipped.` : ".");
+                    toastType = "error";
+                } else {
+                    msg = `Imported ${result.imported} application${result.imported !== 1 ? "s" : ""}` +
+                        (result.skipped ? `, ${result.skipped} skipped` : "") + ".";
+                    toastType = result.skipped ? "error" : "success";
+                }
+                showToast(msg, toastType);
                 if (result.errors.length) {
                     console.warn("Import errors:", result.errors);
                 }

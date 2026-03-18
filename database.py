@@ -1,6 +1,9 @@
+import logging
 import sqlite3
 import os
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
 DB_PATH = os.path.join(DATA_DIR, "applica.db")
@@ -103,8 +106,8 @@ def init_db():
         for migration in MIGRATIONS:
             try:
                 db.execute(migration)
-            except Exception:
-                pass  # Column already exists
+            except sqlite3.OperationalError as e:
+                logger.debug("Migration skipped (already applied): %s", e)
 
 
 @contextmanager
@@ -113,6 +116,7 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     try:
         yield conn
         conn.commit()

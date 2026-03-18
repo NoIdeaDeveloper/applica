@@ -70,6 +70,60 @@ DATA_DIR=/var/applica python main.py
 
 ---
 
+## Docker
+
+```bash
+docker compose up -d
+```
+
+Copy `.env.example` to `.env` to customize the port or data directory:
+
+```bash
+cp .env.example .env
+# Edit .env as needed, then:
+docker compose up -d
+```
+
+---
+
+## Unraid Deployment
+
+### Option A — Docker Compose Manager (recommended)
+
+1. In Community Applications, install the **Docker Compose Manager** plugin.
+2. Go to **Settings → Docker Compose Manager** and create a new project named `applica`.
+3. Paste the contents of `docker-compose.yml` into the compose editor.
+4. Set environment variables by creating a `.env` file alongside the compose file:
+   ```
+   PORT=8000
+   DATA_DIR=/mnt/user/appdata/applica
+   ```
+5. Click **Compose Up**. The app will be available at `http://<unraid-ip>:8000`.
+
+### Option B — Unraid Docker UI (manual)
+
+1. Build the image on your Unraid server (or push it to a registry):
+   ```bash
+   docker build -t applica .
+   ```
+2. In the Unraid Docker tab, click **Add Container** and fill in:
+   - **Repository**: `applica`
+   - **Port**: host port `8000` → container port `8000`
+   - **Volume**: `/mnt/user/appdata/applica` → `/data`
+   - **Environment variable**: `DATA_DIR` = `/data`
+   - **Restart policy**: `unless-stopped`
+3. Click **Apply**.
+
+### Updating
+
+1. Pull or rebuild the image with the latest code.
+2. In the Unraid Docker tab, stop the `applica` container.
+3. Start it again — database migrations run automatically on startup.
+
+> **Data location:** All application data (SQLite DB + uploaded files) lives in the mapped volume. Back up `/mnt/user/appdata/applica` to preserve your data.
+
+---
+
 ## Data
 
 All data is stored in `DATA_DIR`:

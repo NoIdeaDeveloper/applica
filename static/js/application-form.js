@@ -298,6 +298,11 @@ const ApplicationForm = {
 
             const salaryMin = form.salary_min.value !== "" ? parseInt(form.salary_min.value) : null;
             const salaryMax = form.salary_max.value !== "" ? parseInt(form.salary_max.value) : null;
+            const bonus = form.bonus.value !== "" ? parseInt(form.bonus.value) : null;
+            if ((salaryMin !== null && isNaN(salaryMin)) || (salaryMax !== null && isNaN(salaryMax)) || (bonus !== null && isNaN(bonus))) {
+                showFormError("Salary and bonus values must be numbers.");
+                return;
+            }
             if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
                 showFormError("Salary minimum cannot be greater than maximum.");
                 return;
@@ -330,7 +335,7 @@ const ApplicationForm = {
                 date_applied: form.date_applied.value || null,
                 salary_min: salaryMin,
                 salary_max: salaryMax,
-                bonus: form.bonus.value !== "" ? parseInt(form.bonus.value) : null,
+                bonus: bonus,
                 equity: form.equity.value.trim() || null,
                 benefits: form.benefits.value.trim() || null,
                 notes: form.notes.value || null,

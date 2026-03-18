@@ -1,4 +1,12 @@
 data/
 __pycache__/
 *.pyc
+*.pyo
 .git/
+.env
+.env.*
+.claude/
+*.db
+*.sqlite3
+README.md
+.gitignore

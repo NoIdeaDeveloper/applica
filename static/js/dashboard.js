@@ -6,7 +6,8 @@ const Dashboard = {
         ]);
         const recent = appsResult.items;
         const statuses = ["applied", "interviewing", "offer", "rejected", "ghosted"];
-        const maxWeekly = Math.max(...(stats.weekly.map(w => w.count) || [1]), 1);
+        const weeklyCounts = stats.weekly.map(w => w.count);
+        const maxWeekly = weeklyCounts.length ? Math.max(...weeklyCounts) : 1;
 
         if (stats.total === 0) {
             return `
