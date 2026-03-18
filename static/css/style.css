@@ -330,6 +330,15 @@ textarea.input { resize: vertical; font-family: inherit; }
 }
 .pagination-info .text-dim { color: var(--text-dim); }
 
+/* Breadcrumb */
+.breadcrumb { margin-bottom: 12px; }
+.breadcrumb a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+.breadcrumb a:hover { color: var(--text); }
+
 /* Form */
 .form-page { max-width: 700px; }
 .form-grid {

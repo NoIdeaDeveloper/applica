@@ -3,6 +3,7 @@ const ApplicationDetail = {
         const app = await API.getApplication(id);
         return `
         <div class="detail-page">
+            <nav class="breadcrumb"><a href="#/applications">← Applications</a></nav>
             <div class="detail-header">
                 <div>
                     <h1>${esc(app.company)}</h1>

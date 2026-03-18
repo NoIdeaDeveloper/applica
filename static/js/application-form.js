@@ -8,6 +8,7 @@ const ApplicationForm = {
 
         return `
         <div class="form-page">
+            <nav class="breadcrumb">${isEdit ? `<a href="#/applications/${id}">← ${esc(app.company)}</a>` : '<a href="#/applications">← Applications</a>'}</nav>
             <h1>${isEdit ? "Edit" : "New"} Application</h1>
             <form id="app-form" class="form">
                 <div class="form-grid">
