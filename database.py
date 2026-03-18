@@ -36,7 +36,17 @@ CREATE TABLE IF NOT EXISTS followups (
 );
 
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
+CREATE INDEX IF NOT EXISTS idx_applications_search ON applications(company, title);
 CREATE INDEX IF NOT EXISTS idx_followups_app_id ON followups(application_id);
+"""
+
+
+SCHEMA_COMPANY_NOTES = """
+CREATE TABLE IF NOT EXISTS company_notes (
+    company TEXT PRIMARY KEY COLLATE NOCASE,
+    notes TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -58,6 +68,16 @@ MIGRATIONS = [
     "ALTER TABLE followups ADD COLUMN contact_title TEXT",
     "ALTER TABLE followups ADD COLUMN contact_email TEXT",
     "ALTER TABLE applications ADD COLUMN location TEXT",
+    "ALTER TABLE applications ADD COLUMN source TEXT",
+    "ALTER TABLE applications ADD COLUMN employment_type TEXT",
+    "ALTER TABLE applications ADD COLUMN seniority TEXT",
+    "ALTER TABLE applications ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE applications ADD COLUMN rejection_reason TEXT",
+    "ALTER TABLE applications ADD COLUMN bonus INTEGER",
+    "ALTER TABLE applications ADD COLUMN equity TEXT",
+    "ALTER TABLE applications ADD COLUMN benefits TEXT",
+    "ALTER TABLE applications ADD COLUMN industry TEXT",
+    "ALTER TABLE applications ADD COLUMN company_size TEXT",
 ]
 
 
@@ -78,6 +98,7 @@ def init_db():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA)
+        db.executescript(SCHEMA_COMPANY_NOTES)
         db.executescript(SCHEMA_INTERVIEW_ROUNDS)
         for migration in MIGRATIONS:
             try:

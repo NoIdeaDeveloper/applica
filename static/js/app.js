@@ -10,6 +10,10 @@ function getTodayISO() {
     return new Date().toISOString().split("T")[0];
 }
 
+function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+
 function statusBadge(status) {
     return `<span class="badge badge-${status}">${status}</span>`;
 }
@@ -27,6 +31,10 @@ function formatDatetime(d) {
         month: "short", day: "numeric", year: "numeric",
         hour: "numeric", minute: "2-digit"
     });
+}
+
+function formatCurrency(n) {
+    return "$" + Number(n).toLocaleString();
 }
 
 function salaryRange(min, max) {
@@ -106,6 +114,51 @@ window.addEventListener("DOMContentLoaded", () => {
     navigate();
 });
 
+// Shortcuts modal
+function showShortcutsModal() {
+    if (document.getElementById("shortcuts-modal")) return;
+    const modal = document.createElement("div");
+    modal.id = "shortcuts-modal";
+    modal.className = "modal-overlay";
+    modal.innerHTML = `
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2>Keyboard Shortcuts</h2>
+                <button class="modal-close" id="shortcuts-close">×</button>
+            </div>
+            <table class="shortcuts-table">
+                <tbody>
+                    <tr><td><kbd>n</kbd></td><td>New application</td></tr>
+                    <tr><td><kbd>e</kbd></td><td>Edit application (on detail page)</td></tr>
+                    <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
+                    <tr><td><kbd>g</kbd> <kbd>a</kbd></td><td>Go to Applications</td></tr>
+                    <tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Go to Dashboard</td></tr>
+                    <tr><td><kbd>Esc</kbd></td><td>Go back / blur input</td></tr>
+                    <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+                </tbody>
+            </table>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal || e.target.id === "shortcuts-close") modal.remove();
+    });
+}
+
+// Theme toggle
+(function () {
+    const btn = document.getElementById("theme-toggle");
+    const apply = (light) => {
+        document.body.classList.toggle("light", light);
+        btn.textContent = light ? "🌙 Dark mode" : "☀️ Light mode";
+    };
+    apply(localStorage.getItem("applica-theme") === "light");
+    btn.addEventListener("click", () => {
+        const light = !document.body.classList.contains("light");
+        localStorage.setItem("applica-theme", light ? "light" : "dark");
+        apply(light);
+    });
+})();
+
 // Keyboard shortcuts
 (function () {
     const inInput = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
@@ -115,8 +168,12 @@ window.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("keydown", (e) => {
         if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-        // Escape: go back
+        // Escape: close modal or go back
         if (e.key === "Escape") {
+            if (document.getElementById("shortcuts-modal")) {
+                document.getElementById("shortcuts-modal").remove();
+                return;
+            }
             if (inInput()) { document.activeElement.blur(); return; }
             const path = getHashPath().path;
             if (/^\/applications\/\d+\/edit$/.test(path)) {
@@ -129,6 +186,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
         if (inInput()) return;
 
+        // ? : show shortcuts modal
+        if (e.key === "?") {
+            e.preventDefault();
+            showShortcutsModal();
+            return;
+        }
+
         // / : focus search on applications list
         if (e.key === "/") {
             const search = document.getElementById("search-input");
@@ -139,6 +203,16 @@ window.addEventListener("DOMContentLoaded", () => {
         // n : new application
         if (e.key === "n") {
             location.hash = "/applications/new";
+            return;
+        }
+
+        // e : edit application (detail page only, not archived)
+        if (e.key === "e") {
+            const path = getHashPath().path;
+            const match = path.match(/^\/applications\/(\d+)$/);
+            if (match && !document.getElementById("restore-btn")) {
+                location.hash = `/applications/${match[1]}/edit`;
+            }
             return;
         }
 

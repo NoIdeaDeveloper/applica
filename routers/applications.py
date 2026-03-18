@@ -20,9 +20,18 @@ class ApplicationCreate(BaseModel):
     url: Optional[str] = None
     status: str = "applied"
     location: Optional[str] = None
+    source: Optional[str] = None
+    employment_type: Optional[str] = None
+    seniority: Optional[str] = None
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
+    bonus: Optional[int] = None
+    equity: Optional[str] = None
+    benefits: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
     notes: Optional[str] = None
+    rejection_reason: Optional[str] = None
     date_applied: Optional[str] = None
 
 
@@ -32,8 +41,17 @@ class ApplicationUpdate(BaseModel):
     url: Optional[str] = None
     status: Optional[str] = None
     location: Optional[str] = None
+    source: Optional[str] = None
+    employment_type: Optional[str] = None
+    seniority: Optional[str] = None
+    rejection_reason: Optional[str] = None
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
+    bonus: Optional[int] = None
+    equity: Optional[str] = None
+    benefits: Optional[str] = None
+    industry: Optional[str] = None
+    company_size: Optional[str] = None
     notes: Optional[str] = None
     date_applied: Optional[str] = None
 
@@ -61,8 +79,7 @@ def bulk_action(data: BulkAction):
             db.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", data.ids)
             return {"deleted": len(data.ids)}
         elif data.action == "update_status":
-            valid = {"applied", "interviewing", "offer", "rejected", "ghosted"}
-            if data.status not in valid:
+            if data.status not in VALID_STATUSES:
                 raise HTTPException(400, "Invalid status")
             db.execute(
                 f"UPDATE applications SET status = ?, updated_at = datetime('now') WHERE id IN ({placeholders})",
@@ -134,6 +151,7 @@ def list_applications(
     sort: str = Query(default="date_applied DESC"),
     limit: int = Query(default=25, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    archived: bool = Query(default=False),
 ):
     allowed_sorts = {
         "date_applied DESC", "date_applied ASC",
@@ -144,15 +162,9 @@ def list_applications(
     if sort not in allowed_sorts:
         sort = "date_applied DESC"
 
-    where = "WHERE 1=1"
-    params = []
-
-    if status:
-        where += " AND status = ?"
-        params.append(status)
-    if search:
-        where += " AND (company LIKE ? OR title LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%"])
+    conditions, search_params = _search_conditions(status, search)
+    where = "WHERE " + " AND ".join(["archived = ?"] + conditions)
+    params: list = [1 if archived else 0] + search_params
 
     with get_db() as db:
         total = db.execute(f"SELECT COUNT(*) FROM applications {where}", params).fetchone()[0]
@@ -167,10 +179,12 @@ def list_applications(
 def create_application(app: ApplicationCreate):
     with get_db() as db:
         cursor = db.execute(
-            """INSERT INTO applications (company, title, url, status, location, salary_min, salary_max, notes, date_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
-            (app.company, app.title, app.url, app.status, app.location,
-             app.salary_min, app.salary_max, app.notes, app.date_applied),
+            """INSERT INTO applications (company, title, url, status, location, source, employment_type, seniority, salary_min, salary_max, bonus, equity, benefits, industry, company_size, notes, rejection_reason, date_applied)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
+            (app.company, app.title, app.url, app.status, app.location, app.source,
+             app.employment_type, app.seniority, app.salary_min, app.salary_max,
+             app.bonus, app.equity, app.benefits, app.industry, app.company_size,
+             app.notes, app.rejection_reason, app.date_applied),
         )
         row = db.execute("SELECT * FROM applications WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return dict(row)
@@ -194,18 +208,12 @@ def export_applications(
     status: Optional[str] = None,
     search: Optional[str] = None,
 ):
-    where = "WHERE 1=1"
-    params = []
-    if status:
-        where += " AND status = ?"
-        params.append(status)
-    if search:
-        where += " AND (company LIKE ? OR title LIKE ?)"
-        params.extend([f"%{search}%", f"%{search}%"])
+    conditions, params = _search_conditions(status, search)
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
     with get_db() as db:
         rows = [dict(r) for r in db.execute(
-            f"SELECT id, company, title, status, location, date_applied, salary_min, salary_max, url, notes, created_at, updated_at FROM applications {where} ORDER BY date_applied DESC",
+            f"SELECT id, company, title, status, location, source, employment_type, seniority, date_applied, salary_min, salary_max, bonus, equity, benefits, industry, company_size, url, notes, created_at, updated_at FROM applications {where} ORDER BY date_applied DESC",
             params,
         ).fetchall()]
 
@@ -218,7 +226,7 @@ def export_applications(
         )
 
     # CSV
-    fields = ["id", "company", "title", "status", "location", "date_applied", "salary_min", "salary_max", "url", "notes", "created_at", "updated_at"]
+    fields = ["id", "company", "title", "status", "location", "source", "employment_type", "seniority", "date_applied", "salary_min", "salary_max", "bonus", "equity", "benefits", "industry", "company_size", "url", "notes", "created_at", "updated_at"]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
@@ -228,6 +236,104 @@ def export_applications(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=applications.csv"},
     )
+
+
+VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "ghosted"}
+
+
+def _csv_str(row: dict, key: str) -> Optional[str]:
+    v = (row.get(key) or "").strip()
+    return v or None
+
+
+def _csv_int(row: dict, key: str) -> Optional[int]:
+    v = (row.get(key) or "").strip()
+    try:
+        return int(v) if v else None
+    except ValueError:
+        return None
+
+
+def _search_conditions(status: Optional[str], search: Optional[str]) -> tuple[list, list]:
+    """Return (conditions, params) for optional status/search filters."""
+    conditions: list = []
+    params: list = []
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    if search:
+        conditions.append("(company LIKE ? OR title LIKE ?)")
+        params.extend([f"%{search}%", f"%{search}%"])
+    return conditions, params
+
+
+@router.post("/applications/import", status_code=200)
+async def import_applications(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")  # handle BOM from Excel
+    except UnicodeDecodeError:
+        raise HTTPException(400, "File must be UTF-8 encoded")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or "company" not in reader.fieldnames or "title" not in reader.fieldnames:
+        raise HTTPException(400, "CSV must have at least 'company' and 'title' columns")
+
+    imported, skipped = 0, 0
+    errors = []
+
+    with get_db() as db:
+        for i, row in enumerate(reader, start=2):  # row 1 is header
+            company = (row.get("company") or "").strip()
+            title = (row.get("title") or "").strip()
+            if not company or not title:
+                skipped += 1
+                errors.append(f"Row {i}: missing company or title — skipped")
+                continue
+
+            status = (row.get("status") or "applied").strip().lower()
+            if status not in VALID_STATUSES:
+                status = "applied"
+
+            try:
+                db.execute(
+                    """INSERT INTO applications
+                       (company, title, url, status, location, source, employment_type, seniority,
+                        salary_min, salary_max, bonus, equity, benefits, notes, date_applied)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
+                    (company, title, _csv_str(row, "url"), status, _csv_str(row, "location"),
+                     _csv_str(row, "source"), _csv_str(row, "employment_type"), _csv_str(row, "seniority"),
+                     _csv_int(row, "salary_min"), _csv_int(row, "salary_max"), _csv_int(row, "bonus"),
+                     _csv_str(row, "equity"), _csv_str(row, "benefits"), _csv_str(row, "notes"), _csv_str(row, "date_applied")),
+                )
+                imported += 1
+            except Exception as e:
+                skipped += 1
+                errors.append(f"Row {i}: {e}")
+
+    return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
+
+
+@router.post("/applications/{app_id}/archive", status_code=200)
+def archive_application(app_id: int):
+    with get_db() as db:
+        cursor = db.execute(
+            "UPDATE applications SET archived = 1, updated_at = datetime('now') WHERE id = ?", (app_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(404, "Application not found")
+        return dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
+
+
+@router.post("/applications/{app_id}/restore", status_code=200)
+def restore_application(app_id: int):
+    with get_db() as db:
+        cursor = db.execute(
+            "UPDATE applications SET archived = 0, updated_at = datetime('now') WHERE id = ?", (app_id,)
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(404, "Application not found")
+        return dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
 
 
 @router.get("/applications/{app_id}")

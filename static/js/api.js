@@ -29,6 +29,9 @@ const API = {
     uploadResume(id, file) { return this.request("POST", `/applications/${id}/resume`, this._fileFormData(file)); },
     uploadCoverLetter(id, file) { return this.request("POST", `/applications/${id}/cover-letter`, this._fileFormData(file)); },
 
+    archiveApplication(id) { return this.request("POST", `/applications/${id}/archive`); },
+    restoreApplication(id) { return this.request("POST", `/applications/${id}/restore`); },
+    importCSV(file) { return this.request("POST", "/applications/import", this._fileFormData(file)); },
     bulkAction(data) { return this.request("POST", "/applications/bulk", data); },
     checkDuplicate(company, title, excludeId) {
         const qs = new URLSearchParams({ company, title });
@@ -39,6 +42,8 @@ const API = {
     createFollowup(data) { return this.request("POST", "/followups", data); },
     updateFollowup(id, data) { return this.request("PATCH", `/followups/${id}`, data); },
     deleteFollowup(id) { return this.request("DELETE", `/followups/${id}`); },
+    getCompanyNotes(company) { return this.request("GET", `/company-notes/${encodeURIComponent(company)}`); },
+    upsertCompanyNotes(company, notes) { return this.request("PUT", `/company-notes/${encodeURIComponent(company)}`, { notes }); },
     createInterviewRound(data) { return this.request("POST", "/interview-rounds", data); },
     updateInterviewRound(id, data) { return this.request("PATCH", `/interview-rounds/${id}`, data); },
     deleteInterviewRound(id) { return this.request("DELETE", `/interview-rounds/${id}`); },
