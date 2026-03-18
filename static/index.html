@@ -4,14 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Applica</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <nav class="sidebar">
-        <div class="logo">applica</div>
-        <a href="#/" class="nav-link">Dashboard</a>
-        <a href="#/applications" class="nav-link">Applications</a>
-        <a href="#/applications/new" class="nav-link">+ New</a>
+        <div class="sidebar-top">
+            <div class="logo">applica</div>
+            <button class="hamburger" id="hamburger" aria-label="Toggle menu">&#9776;</button>
+        </div>
+        <div class="sidebar-body" id="sidebar-body">
+            <a href="#/" class="nav-link">Dashboard</a>
+            <a href="#/applications" class="nav-link">Applications</a>
+            <a href="#/applications/new" class="nav-link">+ New</a>
+            <div class="shortcuts-hint">
+                <p><kbd>n</kbd> New application</p>
+                <p><kbd>/</kbd> Search</p>
+                <p><kbd>g</kbd><kbd>a</kbd> Applications</p>
+                <p><kbd>g</kbd><kbd>d</kbd> Dashboard</p>
+                <p><kbd>esc</kbd> Go back</p>
+            </div>
+        </div>
     </nav>
     <main id="app"></main>
     <div id="toast-container"></div>

@@ -1,12 +1,28 @@
 const Dashboard = {
     async render() {
-        const [stats, apps] = await Promise.all([
+        const [stats, appsResult] = await Promise.all([
             API.getStats(),
-            API.getApplications({ sort: "updated_at DESC" }),
+            API.getApplications({ sort: "updated_at DESC", limit: 5 }),
         ]);
-        const recent = apps.slice(0, 5);
+        const recent = appsResult.items;
         const statuses = ["applied", "interviewing", "offer", "rejected", "ghosted"];
         const maxWeekly = Math.max(...(stats.weekly.map(w => w.count) || [1]), 1);
+
+        if (stats.total === 0) {
+            return `
+            <div class="dashboard">
+                <h1>Dashboard</h1>
+                <div class="empty-onboarding">
+                    <div class="empty-onboarding-icon">📋</div>
+                    <h2>Track your job search</h2>
+                    <p>Add your first application to start tracking companies, statuses, follow-ups, and interview rounds.</p>
+                    <a href="#/applications/new" class="btn btn-primary">+ Add your first application</a>
+                    <div class="empty-shortcuts">
+                        <p>Tip: press <kbd>n</kbd> from anywhere to add a new application.</p>
+                    </div>
+                </div>
+            </div>`;
+        }
 
         return `
         <div class="dashboard">

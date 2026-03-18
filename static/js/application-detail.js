@@ -1,3 +1,11 @@
+const STAGE_LABELS = {
+    phone_screen: "Phone Screen",
+    technical: "Technical",
+    onsite: "Onsite",
+    final: "Final",
+    other: "Other",
+};
+
 const ApplicationDetail = {
     async render(id) {
         const app = await API.getApplication(id);
@@ -26,6 +34,10 @@ const ApplicationDetail = {
                     <span>${salaryRange(app.salary_min, app.salary_max)}</span>
                 </div>
                 <div class="detail-field">
+                    <label>Location</label>
+                    <span>${app.location ? esc(app.location) : "—"}</span>
+                </div>
+                <div class="detail-field">
                     <label>Job Posting</label>
                     ${app.url ? `<a href="${esc(app.url)}" target="_blank" rel="noopener">${esc(app.url)}</a>` : "<span>—</span>"}
                 </div>
@@ -37,9 +49,48 @@ const ApplicationDetail = {
                     <label>Cover Letter</label>
                     ${app.cover_letter_path ? `<a href="/api/applications/${id}/cover-letter" target="_blank">${esc(app.cover_letter_path)}</a>` : "<span>—</span>"}
                 </div>
+                <div class="detail-field">
+                    <label>Last Updated</label>
+                    <span title="${esc(app.updated_at)}">${formatDatetime(app.updated_at)}</span>
+                </div>
             </div>
 
             ${app.notes ? `<div class="detail-notes"><label>Notes</label><p>${esc(app.notes)}</p></div>` : ""}
+
+            <div class="interviews-section">
+                <h2>Interview Rounds</h2>
+                <form id="round-form" class="followup-inline-form">
+                    <select name="stage" class="input">
+                        <option value="phone_screen">Phone Screen</option>
+                        <option value="technical">Technical</option>
+                        <option value="onsite">Onsite</option>
+                        <option value="final">Final</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <input type="date" name="date" class="input">
+                    <input type="text" name="interviewer" placeholder="Interviewer(s)" class="input">
+                    <select name="outcome" class="input">
+                        <option value="pending">Pending</option>
+                        <option value="passed">Passed</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </form>
+                <textarea name="notes" form="round-form" placeholder="Notes (optional)" class="input followup-notes-textarea" rows="2"></textarea>
+                <div id="rounds-list">
+                    ${app.interview_rounds.length ? app.interview_rounds.map(r => `
+                        <div class="followup-item">
+                            <div class="followup-info">
+                                <span class="badge badge-round-${r.outcome || "pending"}">${STAGE_LABELS[r.stage] || r.stage}</span>
+                                ${r.date ? `<span class="followup-date">${formatDate(r.date)}</span>` : ""}
+                                ${r.interviewer ? `<span>${esc(r.interviewer)}</span>` : ""}
+                                ${r.notes ? `<span class="followup-note">${esc(r.notes)}</span>` : ""}
+                            </div>
+                            <button class="btn btn-sm btn-danger delete-round" data-id="${r.id}">×</button>
+                        </div>
+                    `).join("") : '<p class="empty-state">No interview rounds yet.</p>'}
+                </div>
+            </div>
 
             <div class="followups-section">
                 <h2>Follow-ups</h2>
@@ -58,13 +109,13 @@ const ApplicationDetail = {
                         <option value="outbound">Outbound</option>
                         <option value="inbound">Inbound</option>
                     </select>
-                    <input type="text" name="notes" placeholder="Notes" class="input followup-notes-input">
                     <button type="submit" class="btn btn-primary">Add</button>
                 </form>
+                <textarea name="notes" form="followup-form" placeholder="Notes (optional)" class="input followup-notes-textarea" rows="2"></textarea>
 
                 <div id="followups-list">
                     ${app.followups.length ? app.followups.map(f => `
-                        <div class="followup-item">
+                        <div class="followup-item" data-id="${f.id}">
                             <div class="followup-info">
                                 <span class="badge badge-${f.method}">${f.method}</span>
                                 <span class="followup-direction ${f.direction}">${f.direction === "inbound" ? "&#8592;" : "&#8594;"}</span>
@@ -72,7 +123,35 @@ const ApplicationDetail = {
                                 <span class="followup-date">${formatDate(f.date)}</span>
                                 ${f.notes ? `<span class="followup-note">${esc(f.notes)}</span>` : ""}
                             </div>
-                            <button class="btn btn-sm btn-danger delete-followup" data-id="${f.id}">×</button>
+                            <div class="followup-actions">
+                                <button class="btn btn-sm btn-secondary edit-followup" data-id="${f.id}"
+                                    data-contact-name="${esc(f.contact_name || "")}"
+                                    data-contact-title="${esc(f.contact_title || "")}"
+                                    data-contact-email="${esc(f.contact_email || "")}"
+                                    data-date="${esc(f.date || "")}"
+                                    data-method="${esc(f.method)}"
+                                    data-direction="${esc(f.direction)}"
+                                    data-notes="${esc(f.notes || "")}">Edit</button>
+                                <button class="btn btn-sm btn-danger delete-followup" data-id="${f.id}">×</button>
+                            </div>
+                        </div>
+                        <div class="followup-edit-form" id="edit-form-${f.id}" hidden>
+                            <div class="followup-inline-form">
+                                <input type="text" name="contact_name" placeholder="Contact name" class="input" value="${esc(f.contact_name || "")}">
+                                <input type="text" name="contact_title" placeholder="Their title" class="input" value="${esc(f.contact_title || "")}">
+                                <input type="email" name="contact_email" placeholder="Their email" class="input" value="${esc(f.contact_email || "")}">
+                                <input type="date" name="date" class="input" value="${esc(f.date || "")}">
+                                <select name="method" class="input">
+                                    ${["email","phone","linkedin","other"].map(m => `<option value="${m}" ${f.method===m?"selected":""}>${m.charAt(0).toUpperCase()+m.slice(1)}</option>`).join("")}
+                                </select>
+                                <select name="direction" class="input">
+                                    <option value="outbound" ${f.direction==="outbound"?"selected":""}>Outbound</option>
+                                    <option value="inbound" ${f.direction==="inbound"?"selected":""}>Inbound</option>
+                                </select>
+                                <button class="btn btn-primary save-followup-edit" data-id="${f.id}">Save</button>
+                                <button class="btn btn-secondary cancel-followup-edit" data-id="${f.id}">Cancel</button>
+                            </div>
+                            <textarea name="notes" placeholder="Notes (optional)" class="input followup-notes-textarea" rows="2">${esc(f.notes || "")}</textarea>
                         </div>
                     `).join("") : '<p class="empty-state">No follow-ups yet.</p>'}
                 </div>
@@ -88,9 +167,34 @@ const ApplicationDetail = {
             }
         });
 
+        document.getElementById("round-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const notesEl = document.querySelector("textarea[form='round-form']");
+            await API.createInterviewRound({
+                application_id: parseInt(id),
+                stage: form.stage.value,
+                date: form.date.value || null,
+                interviewer: form.interviewer.value || null,
+                outcome: form.outcome.value,
+                notes: notesEl?.value || null,
+            });
+            showToast("Interview round added.");
+            navigate();
+        });
+
+        document.querySelectorAll(".delete-round").forEach(btn => {
+            btn.addEventListener("click", async () => {
+                if (!confirm("Delete this interview round?")) return;
+                await API.deleteInterviewRound(btn.dataset.id);
+                navigate();
+            });
+        });
+
         document.getElementById("followup-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const form = e.target;
+            const notesEl = document.querySelector("textarea[form='followup-form']");
             await API.createFollowup({
                 application_id: parseInt(id),
                 contact_name: form.contact_name.value || null,
@@ -99,18 +203,41 @@ const ApplicationDetail = {
                 date: form.date.value || null,
                 method: form.method.value,
                 direction: form.direction.value,
-                notes: form.notes.value || null,
+                notes: notesEl?.value || null,
             });
             showToast("Follow-up added.");
             navigate(); // Re-render
         });
 
-        document.querySelectorAll(".delete-followup").forEach(btn => {
-            btn.addEventListener("click", async () => {
-                if (!confirm("Delete this follow-up?")) return;
-                await API.deleteFollowup(btn.dataset.id);
+        document.getElementById("followups-list").addEventListener("click", async (e) => {
+            const btn = e.target.closest("button[data-id]");
+            if (!btn) return;
+            const fid = btn.dataset.id;
+
+            if (btn.classList.contains("edit-followup")) {
+                document.getElementById(`edit-form-${fid}`).hidden = false;
+                btn.closest(".followup-item").style.opacity = "0.4";
+            } else if (btn.classList.contains("cancel-followup-edit")) {
+                document.getElementById(`edit-form-${fid}`).hidden = true;
+                document.querySelector(`.followup-item[data-id="${fid}"]`).style.opacity = "";
+            } else if (btn.classList.contains("save-followup-edit")) {
+                const editForm = document.getElementById(`edit-form-${fid}`);
+                await API.updateFollowup(fid, {
+                    contact_name: editForm.querySelector("[name=contact_name]").value || null,
+                    contact_title: editForm.querySelector("[name=contact_title]").value || null,
+                    contact_email: editForm.querySelector("[name=contact_email]").value || null,
+                    date: editForm.querySelector("[name=date]").value || null,
+                    method: editForm.querySelector("[name=method]").value,
+                    direction: editForm.querySelector("[name=direction]").value,
+                    notes: editForm.querySelector("[name=notes]").value || null,
+                });
+                showToast("Follow-up updated.");
                 navigate();
-            });
+            } else if (btn.classList.contains("delete-followup")) {
+                if (!confirm("Delete this follow-up?")) return;
+                await API.deleteFollowup(fid);
+                navigate();
+            }
         });
     }
 };

@@ -1,9 +1,12 @@
+import csv
+import io
+import json
 import os
 import shutil
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from database import get_db, UPLOADS_DIR
@@ -16,6 +19,7 @@ class ApplicationCreate(BaseModel):
     title: str
     url: Optional[str] = None
     status: str = "applied"
+    location: Optional[str] = None
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     notes: Optional[str] = None
@@ -27,10 +31,46 @@ class ApplicationUpdate(BaseModel):
     title: Optional[str] = None
     url: Optional[str] = None
     status: Optional[str] = None
+    location: Optional[str] = None
     salary_min: Optional[int] = None
     salary_max: Optional[int] = None
     notes: Optional[str] = None
     date_applied: Optional[str] = None
+
+
+class BulkAction(BaseModel):
+    ids: list[int]
+    action: str  # "update_status" | "delete"
+    status: Optional[str] = None
+
+
+@router.post("/applications/bulk", status_code=200)
+def bulk_action(data: BulkAction):
+    if not data.ids:
+        raise HTTPException(400, "No IDs provided")
+    placeholders = ",".join("?" * len(data.ids))
+    with get_db() as db:
+        if data.action == "delete":
+            rows = db.execute(
+                f"SELECT resume_path, cover_letter_path FROM applications WHERE id IN ({placeholders})",
+                data.ids,
+            ).fetchall()
+            for row in rows:
+                _remove_file(row["resume_path"])
+                _remove_file(row["cover_letter_path"])
+            db.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", data.ids)
+            return {"deleted": len(data.ids)}
+        elif data.action == "update_status":
+            valid = {"applied", "interviewing", "offer", "rejected", "ghosted"}
+            if data.status not in valid:
+                raise HTTPException(400, "Invalid status")
+            db.execute(
+                f"UPDATE applications SET status = ?, updated_at = datetime('now') WHERE id IN ({placeholders})",
+                [data.status] + data.ids,
+            )
+            return {"updated": len(data.ids)}
+        else:
+            raise HTTPException(400, "Unknown action")
 
 
 def _remove_file(filename: Optional[str]):
@@ -51,7 +91,16 @@ def _save_upload(app_id: int, file: UploadFile, file_type: str) -> str:
     return filename
 
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
 def _upload_file(app_id: int, file: UploadFile, file_type: str, path_field: str):
+    # Check size before writing to disk
+    contents = file.file.read()
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"File exceeds the 10 MB limit ({len(contents) // (1024*1024)} MB uploaded)")
+    file.file.seek(0)
+
     with get_db() as db:
         row = db.execute(
             f"SELECT id, {path_field} FROM applications WHERE id = ?", (app_id,)
@@ -118,13 +167,67 @@ def list_applications(
 def create_application(app: ApplicationCreate):
     with get_db() as db:
         cursor = db.execute(
-            """INSERT INTO applications (company, title, url, status, salary_min, salary_max, notes, date_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
-            (app.company, app.title, app.url, app.status,
+            """INSERT INTO applications (company, title, url, status, location, salary_min, salary_max, notes, date_applied)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
+            (app.company, app.title, app.url, app.status, app.location,
              app.salary_min, app.salary_max, app.notes, app.date_applied),
         )
         row = db.execute("SELECT * FROM applications WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return dict(row)
+
+
+@router.get("/applications/check-duplicate")
+def check_duplicate(company: str, title: str, exclude_id: Optional[int] = None):
+    with get_db() as db:
+        query = "SELECT id, company, title, status, date_applied FROM applications WHERE LOWER(company) = LOWER(?) AND LOWER(title) = LOWER(?)"
+        params: list = [company, title]
+        if exclude_id is not None:
+            query += " AND id != ?"
+            params.append(exclude_id)
+        rows = db.execute(query, params).fetchall()
+        return {"duplicates": [dict(r) for r in rows]}
+
+
+@router.get("/applications/export")
+def export_applications(
+    fmt: str = Query(default="csv", alias="format"),
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    where = "WHERE 1=1"
+    params = []
+    if status:
+        where += " AND status = ?"
+        params.append(status)
+    if search:
+        where += " AND (company LIKE ? OR title LIKE ?)"
+        params.extend([f"%{search}%", f"%{search}%"])
+
+    with get_db() as db:
+        rows = [dict(r) for r in db.execute(
+            f"SELECT id, company, title, status, location, date_applied, salary_min, salary_max, url, notes, created_at, updated_at FROM applications {where} ORDER BY date_applied DESC",
+            params,
+        ).fetchall()]
+
+    if fmt == "json":
+        content = json.dumps(rows, indent=2)
+        return StreamingResponse(
+            io.BytesIO(content.encode()),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=applications.json"},
+        )
+
+    # CSV
+    fields = ["id", "company", "title", "status", "location", "date_applied", "salary_min", "salary_max", "url", "notes", "created_at", "updated_at"]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+    return StreamingResponse(
+        io.BytesIO(buf.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=applications.csv"},
+    )
 
 
 @router.get("/applications/{app_id}")
@@ -138,6 +241,10 @@ def get_application(app_id: int):
             "SELECT * FROM followups WHERE application_id = ? ORDER BY date DESC", (app_id,)
         ).fetchall()
         result["followups"] = [dict(f) for f in followups]
+        rounds = db.execute(
+            "SELECT * FROM interview_rounds WHERE application_id = ? ORDER BY date ASC, id ASC", (app_id,)
+        ).fetchall()
+        result["interview_rounds"] = [dict(r) for r in rounds]
         return result
 
 

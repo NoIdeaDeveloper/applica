@@ -40,10 +40,37 @@ CREATE INDEX IF NOT EXISTS idx_followups_app_id ON followups(application_id);
 """
 
 
+SCHEMA_INTERVIEW_ROUNDS = """
+CREATE TABLE IF NOT EXISTS interview_rounds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    stage TEXT NOT NULL CHECK(stage IN ('phone_screen','technical','onsite','final','other')),
+    date TEXT,
+    interviewer TEXT,
+    outcome TEXT CHECK(outcome IN ('pending','passed','failed',NULL)),
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rounds_app_id ON interview_rounds(application_id);
+"""
+
 MIGRATIONS = [
     "ALTER TABLE followups ADD COLUMN contact_title TEXT",
     "ALTER TABLE followups ADD COLUMN contact_email TEXT",
+    "ALTER TABLE applications ADD COLUMN location TEXT",
 ]
+
+
+def verify_application_exists(db, app_id: int):
+    """Raise 404 if application doesn't exist."""
+    from fastapi import HTTPException
+    if not db.execute("SELECT id FROM applications WHERE id = ?", (app_id,)).fetchone():
+        raise HTTPException(404, "Application not found")
+
+
+def touch_application(db, app_id: int):
+    """Update the updated_at timestamp on an application."""
+    db.execute("UPDATE applications SET updated_at = datetime('now') WHERE id = ?", (app_id,))
 
 
 def init_db():
@@ -51,6 +78,7 @@ def init_db():
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA)
+        db.executescript(SCHEMA_INTERVIEW_ROUNDS)
         for migration in MIGRATIONS:
             try:
                 db.execute(migration)
