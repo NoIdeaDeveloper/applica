@@ -45,6 +45,8 @@ const ApplicationDetail = {
                 <h2>Follow-ups</h2>
                 <form id="followup-form" class="followup-inline-form">
                     <input type="text" name="contact_name" placeholder="Contact name" class="input">
+                    <input type="text" name="contact_title" placeholder="Their title" class="input">
+                    <input type="email" name="contact_email" placeholder="Their email" class="input">
                     <input type="date" name="date" value="${getTodayISO()}" class="input">
                     <select name="method" class="input">
                         <option value="email">Email</option>
@@ -66,7 +68,7 @@ const ApplicationDetail = {
                             <div class="followup-info">
                                 <span class="badge badge-${f.method}">${f.method}</span>
                                 <span class="followup-direction ${f.direction}">${f.direction === "inbound" ? "&#8592;" : "&#8594;"}</span>
-                                ${f.contact_name ? `<strong>${esc(f.contact_name)}</strong>` : ""}
+                                ${f.contact_name ? `<span class="followup-contact"><strong>${esc(f.contact_name)}</strong>${f.contact_title ? `<span class="followup-contact-meta">, ${esc(f.contact_title)}</span>` : ""}${f.contact_email ? `<a href="mailto:${esc(f.contact_email)}" class="followup-contact-meta"> &lt;${esc(f.contact_email)}&gt;</a>` : ""}</span>` : ""}
                                 <span class="followup-date">${formatDate(f.date)}</span>
                                 ${f.notes ? `<span class="followup-note">${esc(f.notes)}</span>` : ""}
                             </div>
@@ -92,6 +94,8 @@ const ApplicationDetail = {
             await API.createFollowup({
                 application_id: parseInt(id),
                 contact_name: form.contact_name.value || null,
+                contact_title: form.contact_title.value || null,
+                contact_email: form.contact_email.value || null,
                 date: form.date.value || null,
                 method: form.method.value,
                 direction: form.direction.value,

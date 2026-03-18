@@ -422,6 +422,9 @@ textarea.input { resize: vertical; font-family: inherit; }
 .followup-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .followup-date { color: var(--text-dim); font-size: 0.85rem; }
 .followup-note { color: var(--text-dim); font-size: 0.85rem; }
+.followup-contact { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.followup-contact-meta { color: var(--text-dim); font-size: 0.85rem; }
+.followup-contact-meta:hover { color: var(--accent); }
 .followup-direction { font-size: 1.1rem; }
 .followup-direction.inbound { color: var(--offer); }
 .followup-direction.outbound { color: var(--accent); }

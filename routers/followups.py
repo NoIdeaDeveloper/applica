@@ -10,6 +10,8 @@ router = APIRouter()
 class FollowupCreate(BaseModel):
     application_id: int
     contact_name: Optional[str] = None
+    contact_title: Optional[str] = None
+    contact_email: Optional[str] = None
     date: Optional[str] = None
     method: str = "email"
     direction: str = "outbound"
@@ -23,9 +25,11 @@ def create_followup(data: FollowupCreate):
         if not app:
             raise HTTPException(404, "Application not found")
         cursor = db.execute(
-            """INSERT INTO followups (application_id, contact_name, date, method, direction, notes)
-               VALUES (?, ?, COALESCE(?, date('now')), ?, ?, ?)""",
-            (data.application_id, data.contact_name, data.date, data.method, data.direction, data.notes),
+            """INSERT INTO followups
+               (application_id, contact_name, contact_title, contact_email, date, method, direction, notes)
+               VALUES (?, ?, ?, ?, COALESCE(?, date('now')), ?, ?, ?)""",
+            (data.application_id, data.contact_name, data.contact_title, data.contact_email,
+             data.date, data.method, data.direction, data.notes),
         )
         db.execute("UPDATE applications SET updated_at = datetime('now') WHERE id = ?", (data.application_id,))
         row = db.execute("SELECT * FROM followups WHERE id = ?", (cursor.lastrowid,)).fetchone()

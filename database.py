@@ -40,11 +40,22 @@ CREATE INDEX IF NOT EXISTS idx_followups_app_id ON followups(application_id);
 """
 
 
+MIGRATIONS = [
+    "ALTER TABLE followups ADD COLUMN contact_title TEXT",
+    "ALTER TABLE followups ADD COLUMN contact_email TEXT",
+]
+
+
 def init_db():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(UPLOADS_DIR, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA)
+        for migration in MIGRATIONS:
+            try:
+                db.execute(migration)
+            except Exception:
+                pass  # Column already exists
 
 
 @contextmanager
