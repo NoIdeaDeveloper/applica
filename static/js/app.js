@@ -49,6 +49,7 @@ async function navigate() {
     const hash = location.hash.slice(1) || "/";
     const { render, mount } = getRoute(hash);
     const app = document.getElementById("app");
+    app.innerHTML = `<div class="loading-spinner"><div class="spinner"></div></div>`;
     try {
         app.innerHTML = await render();
         mount();
