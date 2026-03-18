@@ -29,29 +29,42 @@ const Applications = {
     },
 
     mount() {
+        const PAGE_SIZE = 25;
+        let currentPage = 0;
+
         const searchInput = document.getElementById("search-input");
         const statusFilter = document.getElementById("status-filter");
         const sortSelect = document.getElementById("sort-select");
 
         const load = async () => {
-            const params = {};
+            const params = { limit: PAGE_SIZE, offset: currentPage * PAGE_SIZE };
             if (searchInput.value) params.search = searchInput.value;
             if (statusFilter.value) params.status = statusFilter.value;
             params.sort = sortSelect.value;
 
             const container = document.getElementById("applications-list");
-            let apps;
+            let result;
             try {
-                apps = await API.getApplications(params);
+                result = await API.getApplications(params);
             } catch (err) {
                 container.innerHTML = `<p class="error-msg">Failed to load: ${esc(err.message)}</p>`;
                 return;
             }
 
+            const { items: apps, total } = result;
+            const totalPages = Math.ceil(total / PAGE_SIZE);
+
             if (!apps.length) {
                 container.innerHTML = '<p class="empty-state">No applications found.</p>';
                 return;
             }
+
+            const paginationHtml = totalPages > 1 ? `
+                <div class="pagination">
+                    <button class="btn btn-secondary" id="prev-page" ${currentPage === 0 ? "disabled" : ""}>← Prev</button>
+                    <span class="pagination-info">Page ${currentPage + 1} of ${totalPages} <span class="text-dim">(${total} total)</span></span>
+                    <button class="btn btn-secondary" id="next-page" ${currentPage >= totalPages - 1 ? "disabled" : ""}>Next →</button>
+                </div>` : "";
 
             container.innerHTML = `
                 <table class="app-table">
@@ -75,22 +88,34 @@ const Applications = {
                             </tr>
                         `).join("")}
                     </tbody>
-                </table>`;
+                </table>
+                ${paginationHtml}`;
 
             container.querySelectorAll(".clickable-row").forEach(row => {
                 row.addEventListener("click", () => {
                     location.hash = `/applications/${row.dataset.id}`;
                 });
             });
+
+            document.getElementById("prev-page")?.addEventListener("click", () => {
+                currentPage--;
+                load();
+            });
+            document.getElementById("next-page")?.addEventListener("click", () => {
+                currentPage++;
+                load();
+            });
         };
+
+        const resetAndLoad = () => { currentPage = 0; load(); };
 
         let debounce;
         searchInput.addEventListener("input", () => {
             clearTimeout(debounce);
-            debounce = setTimeout(load, 300);
+            debounce = setTimeout(resetAndLoad, 300);
         });
-        statusFilter.addEventListener("change", load);
-        sortSelect.addEventListener("change", load);
+        statusFilter.addEventListener("change", resetAndLoad);
+        sortSelect.addEventListener("change", resetAndLoad);
 
         load();
     }

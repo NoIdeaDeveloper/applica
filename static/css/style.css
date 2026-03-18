@@ -316,6 +316,20 @@ textarea.input { resize: vertical; font-family: inherit; }
 .clickable-row { cursor: pointer; transition: background 0.1s; }
 .clickable-row:hover { background: var(--bg-card); }
 
+/* Pagination */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 20px 0 4px;
+}
+.pagination-info {
+    font-size: 0.875rem;
+    color: var(--text-dim);
+}
+.pagination-info .text-dim { color: var(--text-dim); }
+
 /* Form */
 .form-page { max-width: 700px; }
 .form-grid {

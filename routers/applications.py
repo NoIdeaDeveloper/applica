@@ -83,6 +83,8 @@ def list_applications(
     status: Optional[str] = None,
     search: Optional[str] = None,
     sort: str = Query(default="date_applied DESC"),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     allowed_sorts = {
         "date_applied DESC", "date_applied ASC",
@@ -93,21 +95,23 @@ def list_applications(
     if sort not in allowed_sorts:
         sort = "date_applied DESC"
 
-    query = "SELECT * FROM applications WHERE 1=1"
+    where = "WHERE 1=1"
     params = []
 
     if status:
-        query += " AND status = ?"
+        where += " AND status = ?"
         params.append(status)
     if search:
-        query += " AND (company LIKE ? OR title LIKE ?)"
+        where += " AND (company LIKE ? OR title LIKE ?)"
         params.extend([f"%{search}%", f"%{search}%"])
 
-    query += f" ORDER BY {sort}"
-
     with get_db() as db:
-        rows = db.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
+        total = db.execute(f"SELECT COUNT(*) FROM applications {where}", params).fetchone()[0]
+        rows = db.execute(
+            f"SELECT * FROM applications {where} ORDER BY {sort} LIMIT ? OFFSET ?",
+            params + [limit, offset]
+        ).fetchall()
+        return {"items": [dict(r) for r in rows], "total": total}
 
 
 @router.post("/applications", status_code=201)
