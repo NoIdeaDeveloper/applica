@@ -22,15 +22,13 @@ def get_company_notes(company: str):
 @router.put("/company-notes/{company}", status_code=200)
 def upsert_company_notes(company: str, data: CompanyNotesUpdate):
     with get_db() as db:
-        db.execute(
+        row = db.execute(
             """INSERT INTO company_notes (company, notes, updated_at)
                VALUES (?, ?, datetime('now'))
                ON CONFLICT(company) DO UPDATE SET
                    notes = excluded.notes,
-                   updated_at = excluded.updated_at""",
+                   updated_at = excluded.updated_at
+               RETURNING *""",
             (company, data.notes),
-        )
-        row = db.execute(
-            "SELECT * FROM company_notes WHERE company = ?", (company,)
         ).fetchone()
         return dict(row)

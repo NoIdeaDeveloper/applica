@@ -20,7 +20,7 @@ const Applications = {
         const status = params.get("status") || "";
         const sort = params.get("sort") || "date_applied DESC";
         const archived = params.get("archived") === "1";
-        const statuses = ["applied", "interviewing", "offer", "rejected", "ghosted"];
+        const statuses = STATUSES;
         const sorts = [
             ["date_applied DESC", "Newest First"],
             ["date_applied ASC", "Oldest First"],
@@ -270,7 +270,7 @@ const Applications = {
                 e.stopPropagation();
                 closeStatusDropdown();
 
-                const statuses = ["applied", "interviewing", "offer", "rejected", "ghosted"];
+                const statuses = STATUSES;
                 const appId = btn.dataset.id;
                 const current = btn.dataset.status;
 
@@ -343,13 +343,13 @@ const Applications = {
         const resetAndLoad = () => { currentPage = 0; load(); };
 
         let debounce;
-        searchInput.addEventListener("input", () => {
+        const debouncedResetAndLoad = () => {
             clearTimeout(debounce);
-            updateSaveBtn();
             debounce = setTimeout(resetAndLoad, 300);
-        });
-        statusFilter?.addEventListener("change", () => { updateSaveBtn(); resetAndLoad(); });
-        sortSelect.addEventListener("change", () => { updateSaveBtn(); resetAndLoad(); });
+        };
+        searchInput.addEventListener("input", () => { updateSaveBtn(); debouncedResetAndLoad(); });
+        statusFilter?.addEventListener("change", () => { updateSaveBtn(); debouncedResetAndLoad(); });
+        sortSelect.addEventListener("change", () => { updateSaveBtn(); debouncedResetAndLoad(); });
         updateSaveBtn();
 
         load();

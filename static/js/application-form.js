@@ -71,7 +71,7 @@ const ApplicationForm = {
                     <div class="form-group">
                         <label for="status">Status</label>
                         <select id="status" name="status" class="input">
-                            ${["applied", "interviewing", "offer", "rejected", "ghosted"].map(s =>
+                            ${STATUSES.map(s =>
                                 `<option value="${s}" ${(app?.status || "applied") === s ? "selected" : ""}>${s}</option>`
                             ).join("")}
                         </select>

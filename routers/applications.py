@@ -3,13 +3,13 @@ import io
 import json
 import os
 import shutil
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
-from database import get_db, UPLOADS_DIR
+from database import get_db, UPLOADS_DIR, VALID_STATUSES, verify_application_exists
 
 router = APIRouter()
 
@@ -58,7 +58,7 @@ class ApplicationUpdate(BaseModel):
 
 class BulkAction(BaseModel):
     ids: list[int]
-    action: str  # "update_status" | "delete"
+    action: Literal["update_status", "delete"]
     status: Optional[str] = None
 
 
@@ -86,8 +86,6 @@ def bulk_action(data: BulkAction):
                 [data.status] + data.ids,
             )
             return {"updated": len(data.ids)}
-        else:
-            raise HTTPException(400, "Unknown action")
 
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"}
@@ -141,11 +139,10 @@ def _upload_file(app_id: int, file: UploadFile, file_type: str, path_field: str)
     file.file.seek(0)
 
     with get_db() as db:
+        verify_application_exists(db, app_id)
         row = db.execute(
-            f"SELECT id, {path_field} FROM applications WHERE id = ?", (app_id,)
+            f"SELECT {path_field} FROM applications WHERE id = ?", (app_id,)
         ).fetchone()
-        if not row:
-            raise HTTPException(404, "Application not found")
         _remove_file(row[path_field])
         filename = _save_upload(app_id, file, file_type)
         db.execute(
@@ -200,15 +197,15 @@ def list_applications(
 @router.post("/applications", status_code=201)
 def create_application(app: ApplicationCreate):
     with get_db() as db:
-        cursor = db.execute(
+        row = db.execute(
             """INSERT INTO applications (company, title, url, status, location, source, employment_type, seniority, salary_min, salary_max, bonus, equity, benefits, industry, company_size, notes, rejection_reason, date_applied)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))
+               RETURNING *""",
             (app.company, app.title, app.url, app.status, app.location, app.source,
              app.employment_type, app.seniority, app.salary_min, app.salary_max,
              app.bonus, app.equity, app.benefits, app.industry, app.company_size,
              app.notes, app.rejection_reason, app.date_applied),
-        )
-        row = db.execute("SELECT * FROM applications WHERE id = ?", (cursor.lastrowid,)).fetchone()
+        ).fetchone()
         return dict(row)
 
 
@@ -260,19 +257,13 @@ def export_applications(
     )
 
 
-VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "ghosted"}
-
-
-def _csv_str(row: dict, key: str) -> Optional[str]:
+def _csv_val(row: dict, key: str, cast=str):
     v = (row.get(key) or "").strip()
-    return v or None
-
-
-def _csv_int(row: dict, key: str) -> Optional[int]:
-    v = (row.get(key) or "").strip()
+    if not v:
+        return None
     try:
-        return int(v) if v else None
-    except ValueError:
+        return cast(v)
+    except (ValueError, TypeError):
         return None
 
 
@@ -323,10 +314,10 @@ async def import_applications(file: UploadFile = File(...)):
                        (company, title, url, status, location, source, employment_type, seniority,
                         salary_min, salary_max, bonus, equity, benefits, notes, date_applied)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, date('now')))""",
-                    (company, title, _csv_str(row, "url"), status, _csv_str(row, "location"),
-                     _csv_str(row, "source"), _csv_str(row, "employment_type"), _csv_str(row, "seniority"),
-                     _csv_int(row, "salary_min"), _csv_int(row, "salary_max"), _csv_int(row, "bonus"),
-                     _csv_str(row, "equity"), _csv_str(row, "benefits"), _csv_str(row, "notes"), _csv_str(row, "date_applied")),
+                    (company, title, _csv_val(row, "url"), status, _csv_val(row, "location"),
+                     _csv_val(row, "source"), _csv_val(row, "employment_type"), _csv_val(row, "seniority"),
+                     _csv_val(row, "salary_min", int), _csv_val(row, "salary_max", int), _csv_val(row, "bonus", int),
+                     _csv_val(row, "equity"), _csv_val(row, "benefits"), _csv_val(row, "notes"), _csv_val(row, "date_applied")),
                 )
                 imported += 1
             except Exception as e:
@@ -336,35 +327,32 @@ async def import_applications(file: UploadFile = File(...)):
     return {"imported": imported, "skipped": skipped, "errors": errors[:20]}
 
 
+def _set_archived(app_id: int, value: int):
+    with get_db() as db:
+        row = db.execute(
+            "UPDATE applications SET archived = ?, updated_at = datetime('now') WHERE id = ? RETURNING *",
+            (value, app_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Application not found")
+        return dict(row)
+
+
 @router.post("/applications/{app_id}/archive", status_code=200)
 def archive_application(app_id: int):
-    with get_db() as db:
-        cursor = db.execute(
-            "UPDATE applications SET archived = 1, updated_at = datetime('now') WHERE id = ?", (app_id,)
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(404, "Application not found")
-        return dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
+    return _set_archived(app_id, 1)
 
 
 @router.post("/applications/{app_id}/restore", status_code=200)
 def restore_application(app_id: int):
-    with get_db() as db:
-        cursor = db.execute(
-            "UPDATE applications SET archived = 0, updated_at = datetime('now') WHERE id = ?", (app_id,)
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(404, "Application not found")
-        return dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
+    return _set_archived(app_id, 0)
 
 
 @router.get("/applications/{app_id}")
 def get_application(app_id: int):
     with get_db() as db:
-        row = db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Application not found")
-        result = dict(row)
+        verify_application_exists(db, app_id)
+        result = dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
         followups = db.execute(
             "SELECT * FROM followups WHERE application_id = ? ORDER BY date DESC", (app_id,)
         ).fetchall()
@@ -385,22 +373,20 @@ def update_application(app_id: int, data: ApplicationUpdate):
     with get_db() as db:
         set_clause = ", ".join(f"{k} = ?" for k in fields)
         values = list(fields.values()) + [app_id]
-        cursor = db.execute(
-            f"UPDATE applications SET {set_clause}, updated_at = datetime('now') WHERE id = ?",
+        row = db.execute(
+            f"UPDATE applications SET {set_clause}, updated_at = datetime('now') WHERE id = ? RETURNING *",
             values,
-        )
-        if cursor.rowcount == 0:
+        ).fetchone()
+        if not row:
             raise HTTPException(404, "Application not found")
-        row = db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
         return dict(row)
 
 
 @router.delete("/applications/{app_id}", status_code=204)
 def delete_application(app_id: int):
     with get_db() as db:
-        row = db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Application not found")
+        verify_application_exists(db, app_id)
+        row = db.execute("SELECT resume_path, cover_letter_path FROM applications WHERE id = ?", (app_id,)).fetchone()
         _remove_file(row["resume_path"])
         _remove_file(row["cover_letter_path"])
         db.execute("DELETE FROM applications WHERE id = ?", (app_id,))

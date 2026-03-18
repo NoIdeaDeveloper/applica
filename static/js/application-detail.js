@@ -1,3 +1,10 @@
+function renderFollowupContact(f) {
+    if (!f.contact_name) return "";
+    const title = f.contact_title ? `<span class="followup-contact-meta">, ${esc(f.contact_title)}</span>` : "";
+    const email = f.contact_email ? `<a href="mailto:${esc(f.contact_email)}" class="followup-contact-meta"> &lt;${esc(f.contact_email)}&gt;</a>` : "";
+    return `<span class="followup-contact"><strong>${esc(f.contact_name)}</strong>${title}${email}</span>`;
+}
+
 function interviewSummary(rounds) {
     if (!rounds.length) return "";
     const counts = { passed: 0, failed: 0, pending: 0 };
@@ -234,7 +241,7 @@ const ApplicationDetail = {
                             <div class="followup-info">
                                 <span class="badge badge-${f.method}">${f.method}</span>
                                 <span class="followup-direction ${f.direction}">${f.direction === "inbound" ? "&#8592;" : "&#8594;"}</span>
-                                ${f.contact_name ? `<span class="followup-contact"><strong>${esc(f.contact_name)}</strong>${f.contact_title ? `<span class="followup-contact-meta">, ${esc(f.contact_title)}</span>` : ""}${f.contact_email ? `<a href="mailto:${esc(f.contact_email)}" class="followup-contact-meta"> &lt;${esc(f.contact_email)}&gt;</a>` : ""}</span>` : ""}
+                                ${renderFollowupContact(f)}
                                 <span class="followup-date">${formatDate(f.date)}</span>
                                 ${f.notes ? `<span class="followup-note">${esc(f.notes)}</span>` : ""}
                             </div>

@@ -22,15 +22,15 @@ class FollowupCreate(BaseModel):
 def create_followup(data: FollowupCreate):
     with get_db() as db:
         verify_application_exists(db, data.application_id)
-        cursor = db.execute(
+        row = db.execute(
             """INSERT INTO followups
                (application_id, contact_name, contact_title, contact_email, date, method, direction, notes)
-               VALUES (?, ?, ?, ?, COALESCE(?, date('now')), ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, COALESCE(?, date('now')), ?, ?, ?)
+               RETURNING *""",
             (data.application_id, data.contact_name, data.contact_title, data.contact_email,
              data.date, data.method, data.direction, data.notes),
-        )
+        ).fetchone()
         touch_application(db, data.application_id)
-        row = db.execute("SELECT * FROM followups WHERE id = ?", (cursor.lastrowid,)).fetchone()
         return dict(row)
 
 
@@ -46,25 +46,19 @@ class FollowupUpdate(BaseModel):
 
 @router.patch("/followups/{followup_id}", status_code=200)
 def update_followup(followup_id: int, data: FollowupUpdate):
+    fields = data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(400, "No fields to update")
     with get_db() as db:
         row = db.execute("SELECT * FROM followups WHERE id = ?", (followup_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Follow-up not found")
-        db.execute(
-            """UPDATE followups SET
-               contact_name = COALESCE(?, contact_name),
-               contact_title = COALESCE(?, contact_title),
-               contact_email = COALESCE(?, contact_email),
-               date = COALESCE(?, date),
-               method = COALESCE(?, method),
-               direction = COALESCE(?, direction),
-               notes = COALESCE(?, notes)
-               WHERE id = ?""",
-            (data.contact_name, data.contact_title, data.contact_email,
-             data.date, data.method, data.direction, data.notes, followup_id),
-        )
+        set_clause = ", ".join(f"{k} = ?" for k in fields)
+        updated = db.execute(
+            f"UPDATE followups SET {set_clause} WHERE id = ? RETURNING *",
+            list(fields.values()) + [followup_id],
+        ).fetchone()
         touch_application(db, row["application_id"])
-        updated = db.execute("SELECT * FROM followups WHERE id = ?", (followup_id,)).fetchone()
         return dict(updated)
 
 

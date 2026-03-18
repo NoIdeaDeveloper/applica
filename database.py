@@ -84,6 +84,9 @@ MIGRATIONS = [
 ]
 
 
+VALID_STATUSES = {"applied", "interviewing", "offer", "rejected", "ghosted"}
+
+
 def verify_application_exists(db, app_id: int):
     """Raise 404 if application doesn't exist."""
     from fastapi import HTTPException

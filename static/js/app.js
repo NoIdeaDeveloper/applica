@@ -1,3 +1,6 @@
+// Shared constants
+const STATUSES = ["applied", "interviewing", "offer", "rejected", "ghosted"];
+
 // Helpers (loaded first, available to all view modules)
 function esc(s) {
     if (!s) return "";
@@ -41,10 +44,9 @@ function salaryRange(min, max) {
     const hasMin = min != null && min !== "";
     const hasMax = max != null && max !== "";
     if (!hasMin && !hasMax) return "—";
-    const fmt = n => "$" + Number(n).toLocaleString();
-    if (hasMin && hasMax) return `${fmt(min)} – ${fmt(max)}`;
-    if (hasMin) return `${fmt(min)}+`;
-    return `Up to ${fmt(max)}`;
+    if (hasMin && hasMax) return `${formatCurrency(min)} – ${formatCurrency(max)}`;
+    if (hasMin) return `${formatCurrency(min)}+`;
+    return `Up to ${formatCurrency(max)}`;
 }
 
 // Toast notifications

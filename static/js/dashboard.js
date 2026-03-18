@@ -5,7 +5,7 @@ const Dashboard = {
             API.getApplications({ sort: "updated_at DESC", limit: 5 }),
         ]);
         const recent = appsResult.items;
-        const statuses = ["applied", "interviewing", "offer", "rejected", "ghosted"];
+        const statuses = STATUSES;
         const weeklyCounts = stats.weekly.map(w => w.count);
         const maxWeekly = weeklyCounts.length ? Math.max(...weeklyCounts) : 1;
 
