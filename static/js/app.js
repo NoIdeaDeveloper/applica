@@ -28,6 +28,21 @@ function salaryRange(min, max) {
     return min ? fmt(min) + "+" : "Up to " + fmt(max);
 }
 
+// Toast notifications
+function showToast(message, type = "success") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    // Trigger animation
+    requestAnimationFrame(() => toast.classList.add("toast-visible"));
+    setTimeout(() => {
+        toast.classList.remove("toast-visible");
+        toast.addEventListener("transitionend", () => toast.remove(), { once: true });
+    }, 3000);
+}
+
 // Router
 const ROUTES = [
     { pattern: /^\/applications\/(\d+)\/edit$/, render: id => ApplicationForm.render(id), mount: id => ApplicationForm.mount(id) },

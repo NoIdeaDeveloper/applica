@@ -96,6 +96,7 @@ const ApplicationDetail = {
                 direction: form.direction.value,
                 notes: form.notes.value || null,
             });
+            showToast("Follow-up added.");
             navigate(); // Re-render
         });
 

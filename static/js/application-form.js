@@ -101,9 +101,10 @@ const ApplicationForm = {
                 if (coverFile) uploads.push(API.uploadCoverLetter(app.id, coverFile));
                 if (uploads.length) await Promise.all(uploads);
 
+                showToast(id ? "Application updated." : "Application added.");
                 location.hash = `/applications/${app.id}`;
             } catch (err) {
-                alert("Error: " + err.message);
+                showToast("Error: " + err.message, "error");
             }
         });
     }
