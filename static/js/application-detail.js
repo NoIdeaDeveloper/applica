@@ -102,6 +102,7 @@ const ApplicationDetail = {
 
         document.querySelectorAll(".delete-followup").forEach(btn => {
             btn.addEventListener("click", async () => {
+                if (!confirm("Delete this follow-up?")) return;
                 await API.deleteFollowup(btn.dataset.id);
                 navigate();
             });
