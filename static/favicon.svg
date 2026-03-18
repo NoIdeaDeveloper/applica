@@ -1,4 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#1a1d27"/>
-  <text x="16" y="23" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="20" font-weight="700" fill="#6c8aff" text-anchor="middle">a</text>
+  <!-- leaves -->
+  <path d="M16 7 C14 3, 9 4, 10 8 C11 5, 14 6, 16 9 C18 6, 21 5, 22 8 C23 4, 18 3, 16 7Z" fill="#2ecc71"/>
+  <!-- body -->
+  <path d="M9 11 C8 18, 12 26, 16 28 C20 26, 24 18, 23 11Z" fill="#e74c3c"/>
+  <!-- seeds -->
+  <ellipse cx="14" cy="16" rx="0.8" ry="1" fill="#c0392b" transform="rotate(-10 14 16)"/>
+  <ellipse cx="18" cy="16" rx="0.8" ry="1" fill="#c0392b" transform="rotate(10 18 16)"/>
+  <ellipse cx="16" cy="20" rx="0.8" ry="1" fill="#c0392b"/>
+  <ellipse cx="13" cy="21" rx="0.7" ry="0.9" fill="#c0392b" transform="rotate(-5 13 21)"/>
+  <ellipse cx="19" cy="21" rx="0.7" ry="0.9" fill="#c0392b" transform="rotate(5 19 21)"/>
+  <!-- shine -->
+  <ellipse cx="12.5" cy="14" rx="1.5" ry="2" fill="rgba(255,255,255,0.25)" transform="rotate(-20 12.5 14)"/>
 </svg>
