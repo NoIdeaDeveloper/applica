@@ -122,6 +122,14 @@ docker compose up -d
 
 > **Data location:** All application data (SQLite DB + uploaded files) lives in the mapped volume. Back up `/mnt/user/appdata/applica` to preserve your data.
 
+### Data Backup
+
+To ensure your data is safe, regularly back up the `/mnt/user/appdata/applica` directory on your Unraid server. This directory contains:
+- `applica.db`: SQLite database with all application data.
+- `uploads/`: Uploaded resumes and cover letters.
+
+You can use Unraid's built-in backup tools or manually copy the directory to another location.
+
 ---
 
 ## Data
