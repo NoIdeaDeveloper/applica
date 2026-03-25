@@ -1,21 +1,10 @@
-from typing import Optional
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
-from database import get_db, verify_application_exists, touch_application
+from backend.database import get_db
+from backend.utils import verify_application_exists, touch_application
+from backend.schemas import FollowupCreate, FollowupUpdate
 
 router = APIRouter()
-
-
-class FollowupCreate(BaseModel):
-    application_id: int
-    contact_name: Optional[str] = None
-    contact_title: Optional[str] = None
-    contact_email: Optional[str] = None
-    date: Optional[str] = None
-    method: str = "email"
-    direction: str = "outbound"
-    notes: Optional[str] = None
 
 
 @router.post("/followups", status_code=201)
@@ -34,31 +23,21 @@ def create_followup(data: FollowupCreate):
         return dict(row)
 
 
-class FollowupUpdate(BaseModel):
-    contact_name: Optional[str] = None
-    contact_title: Optional[str] = None
-    contact_email: Optional[str] = None
-    date: Optional[str] = None
-    method: Optional[str] = None
-    direction: Optional[str] = None
-    notes: Optional[str] = None
-
-
 @router.patch("/followups/{followup_id}", status_code=200)
 def update_followup(followup_id: int, data: FollowupUpdate):
     fields = data.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(400, "No fields to update")
     with get_db() as db:
-        row = db.execute("SELECT * FROM followups WHERE id = ?", (followup_id,)).fetchone()
-        if not row:
+        existing = db.execute("SELECT application_id FROM followups WHERE id = ?", (followup_id,)).fetchone()
+        if not existing:
             raise HTTPException(404, "Follow-up not found")
         set_clause = ", ".join(f"{k} = ?" for k in fields)
         updated = db.execute(
             f"UPDATE followups SET {set_clause} WHERE id = ? RETURNING *",
             list(fields.values()) + [followup_id],
         ).fetchone()
-        touch_application(db, row["application_id"])
+        touch_application(db, existing["application_id"])
         return dict(updated)
 
 

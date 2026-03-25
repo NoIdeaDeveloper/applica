@@ -259,7 +259,9 @@ const ApplicationForm = {
         const rejectionGroup = document.getElementById("rejection-reason-group");
         const statusSelect = document.getElementById("status");
         const toggleRejection = () => {
-            rejectionGroup.hidden = statusSelect.value !== "rejected" && statusSelect.value !== "ghosted";
+            const show = statusSelect.value === "rejected" || statusSelect.value === "ghosted";
+            rejectionGroup.hidden = !show;
+            if (!show && form.rejection_reason) form.rejection_reason.value = "";
         };
         statusSelect.addEventListener("change", toggleRejection);
 

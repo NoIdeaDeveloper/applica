@@ -3,92 +3,17 @@ import io
 import json
 import os
 import shutil
-from typing import Literal, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
 
-from database import get_db, UPLOADS_DIR, VALID_STATUSES, verify_application_exists
+from backend.database import get_db, UPLOADS_DIR
+from backend.constants import VALID_STATUSES, MAX_UPLOAD_BYTES, ALLOWED_EXTENSIONS
+from backend.utils import verify_application_exists
+from backend.schemas import ApplicationCreate, ApplicationUpdate, BulkAction
 
 router = APIRouter()
-
-
-class ApplicationCreate(BaseModel):
-    company: str
-    title: str
-    url: Optional[str] = None
-    status: str = "applied"
-    location: Optional[str] = None
-    source: Optional[str] = None
-    employment_type: Optional[str] = None
-    seniority: Optional[str] = None
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    bonus: Optional[int] = None
-    equity: Optional[str] = None
-    benefits: Optional[str] = None
-    industry: Optional[str] = None
-    company_size: Optional[str] = None
-    notes: Optional[str] = None
-    rejection_reason: Optional[str] = None
-    date_applied: Optional[str] = None
-
-
-class ApplicationUpdate(BaseModel):
-    company: Optional[str] = None
-    title: Optional[str] = None
-    url: Optional[str] = None
-    status: Optional[str] = None
-    location: Optional[str] = None
-    source: Optional[str] = None
-    employment_type: Optional[str] = None
-    seniority: Optional[str] = None
-    rejection_reason: Optional[str] = None
-    salary_min: Optional[int] = None
-    salary_max: Optional[int] = None
-    bonus: Optional[int] = None
-    equity: Optional[str] = None
-    benefits: Optional[str] = None
-    industry: Optional[str] = None
-    company_size: Optional[str] = None
-    notes: Optional[str] = None
-    date_applied: Optional[str] = None
-
-
-class BulkAction(BaseModel):
-    ids: list[int]
-    action: Literal["update_status", "delete"]
-    status: Optional[str] = None
-
-
-@router.post("/applications/bulk", status_code=200)
-def bulk_action(data: BulkAction):
-    if not data.ids:
-        raise HTTPException(400, "No IDs provided")
-    placeholders = ",".join("?" * len(data.ids))
-    with get_db() as db:
-        if data.action == "delete":
-            rows = db.execute(
-                f"SELECT resume_path, cover_letter_path FROM applications WHERE id IN ({placeholders})",
-                data.ids,
-            ).fetchall()
-            for row in rows:
-                _remove_file(row["resume_path"])
-                _remove_file(row["cover_letter_path"])
-            db.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", data.ids)
-            return {"deleted": len(data.ids)}
-        elif data.action == "update_status":
-            if data.status not in VALID_STATUSES:
-                raise HTTPException(400, "Invalid status")
-            db.execute(
-                f"UPDATE applications SET status = ?, updated_at = datetime('now') WHERE id IN ({placeholders})",
-                [data.status] + data.ids,
-            )
-            return {"updated": len(data.ids)}
-
-
-ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"}
 
 
 _UPLOADS_REAL = None
@@ -125,17 +50,13 @@ def _save_upload(app_id: int, file: UploadFile, file_type: str) -> str:
     return filename
 
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
-
-
 def _upload_file(app_id: int, file: UploadFile, file_type: str, path_field: str):
-    # Check size in chunks to avoid loading the whole file into memory
     size = 0
-    chunk_size = 1024 * 1024  # 1 MB
+    chunk_size = 1024 * 1024
     while chunk := file.file.read(chunk_size):
         size += len(chunk)
         if size > MAX_UPLOAD_BYTES:
-            raise HTTPException(413, "File exceeds the 10 MB limit")
+            raise HTTPException(413, f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit")
     file.file.seek(0)
 
     with get_db() as db:
@@ -154,6 +75,7 @@ def _upload_file(app_id: int, file: UploadFile, file_type: str, path_field: str)
 
 def _download_file(app_id: int, path_field: str, label: str):
     with get_db() as db:
+        verify_application_exists(db, app_id)
         row = db.execute(
             f"SELECT {path_field} FROM applications WHERE id = ?", (app_id,)
         ).fetchone()
@@ -161,6 +83,32 @@ def _download_file(app_id: int, path_field: str, label: str):
             raise HTTPException(404, f"No {label} uploaded")
         filepath = _safe_upload_path(row[path_field])
         return FileResponse(filepath, filename=row[path_field])
+
+
+@router.post("/applications/bulk", status_code=200)
+def bulk_action(data: BulkAction):
+    if not data.ids:
+        raise HTTPException(400, "No IDs provided")
+    placeholders = ",".join("?" * len(data.ids))
+    with get_db() as db:
+        if data.action == "delete":
+            rows = db.execute(
+                f"SELECT resume_path, cover_letter_path FROM applications WHERE id IN ({placeholders})",
+                data.ids,
+            ).fetchall()
+            for row in rows:
+                _remove_file(row["resume_path"])
+                _remove_file(row["cover_letter_path"])
+            db.execute(f"DELETE FROM applications WHERE id IN ({placeholders})", data.ids)
+            return {"deleted": len(data.ids)}
+        elif data.action == "update_status":
+            if data.status not in VALID_STATUSES:
+                raise HTTPException(400, "Invalid status")
+            db.execute(
+                f"UPDATE applications SET status = ?, updated_at = datetime('now') WHERE id IN ({placeholders})",
+                [data.status] + data.ids,
+            )
+            return {"updated": len(data.ids)}
 
 
 @router.get("/applications")
@@ -244,7 +192,6 @@ def export_applications(
             headers={"Content-Disposition": "attachment; filename=applications.json"},
         )
 
-    # CSV
     fields = ["id", "company", "title", "status", "location", "source", "employment_type", "seniority", "date_applied", "salary_min", "salary_max", "bonus", "equity", "benefits", "industry", "company_size", "url", "notes", "created_at", "updated_at"]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
@@ -296,7 +243,7 @@ async def import_applications(file: UploadFile = File(...)):
     errors = []
 
     with get_db() as db:
-        for i, row in enumerate(reader, start=2):  # row 1 is header
+        for i, row in enumerate(reader, start=2):
             company = (row.get("company") or "").strip()
             title = (row.get("title") or "").strip()
             if not company or not title:
@@ -351,8 +298,10 @@ def restore_application(app_id: int):
 @router.get("/applications/{app_id}")
 def get_application(app_id: int):
     with get_db() as db:
-        verify_application_exists(db, app_id)
-        result = dict(db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone())
+        row = db.execute("SELECT * FROM applications WHERE id = ?", (app_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Application not found")
+        result = dict(row)
         followups = db.execute(
             "SELECT * FROM followups WHERE application_id = ? ORDER BY date DESC", (app_id,)
         ).fetchall()
@@ -385,8 +334,9 @@ def update_application(app_id: int, data: ApplicationUpdate):
 @router.delete("/applications/{app_id}", status_code=204)
 def delete_application(app_id: int):
     with get_db() as db:
-        verify_application_exists(db, app_id)
         row = db.execute("SELECT resume_path, cover_letter_path FROM applications WHERE id = ?", (app_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Application not found")
         _remove_file(row["resume_path"])
         _remove_file(row["cover_letter_path"])
         db.execute("DELETE FROM applications WHERE id = ?", (app_id,))

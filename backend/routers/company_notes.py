@@ -1,13 +1,9 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
 
-from database import get_db
+from backend.database import get_db
+from backend.schemas import CompanyNotesUpdate
 
 router = APIRouter()
-
-
-class CompanyNotesUpdate(BaseModel):
-    notes: str
 
 
 @router.get("/company-notes/{company}")
