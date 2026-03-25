@@ -100,6 +100,8 @@ docker compose up -d
    ```
 5. Click **Compose Up**. The app will be available at `http://<unraid-ip>:8000`.
 
+> **Note:** The container runs as root so that it can write to your Unraid host path without permission issues. This is the standard approach for Unraid containers.
+
 ### Option B — Unraid Docker UI (manual)
 
 1. Build the image on your Unraid server (or push it to a registry):

@@ -172,6 +172,8 @@ function showShortcutsModal() {
 
         // Escape: close modal or go back
         if (e.key === "Escape") {
+            // Close inline status dropdown if open
+            document.querySelector(".status-inline-menu")?.remove();
             if (document.getElementById("shortcuts-modal")) {
                 document.getElementById("shortcuts-modal").remove();
                 return;

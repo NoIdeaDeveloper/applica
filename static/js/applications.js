@@ -396,7 +396,9 @@ const Applications = {
                 }
                 showToast(msg, toastType);
                 if (result.errors.length) {
-                    console.warn("Import errors:", result.errors);
+                    const preview = result.errors.slice(0, 3).join("\n");
+                    const more = result.errors.length > 3 ? `\n…and ${result.errors.length - 3} more` : "";
+                    showToast(`Import issues:\n${preview}${more}`, "error");
                 }
                 load();
             } catch (err) {

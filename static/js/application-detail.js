@@ -320,7 +320,10 @@ const ApplicationDetail = {
 
         API.getCompanyNotes(company)
             .then(data => renderCompanyNotes(data.notes || ""))
-            .catch(() => renderCompanyNotes("", false));
+            .catch(() => {
+                showToast("Could not load company notes.", "error");
+                renderCompanyNotes("", false);
+            });
 
         // Helper: run an async API call, navigate on success, show error toast on failure.
         // If successMsg is provided it is shown before navigating.
@@ -334,8 +337,10 @@ const ApplicationDetail = {
             }
         };
 
-        document.getElementById("archive-btn")?.addEventListener("click", () =>
-            apiAction(() => API.archiveApplication(id), "Failed to archive application.", "Application archived."));
+        document.getElementById("archive-btn")?.addEventListener("click", () => {
+            if (!confirm("Archive this application? It will be hidden from the main list.")) return;
+            apiAction(() => API.archiveApplication(id), "Failed to archive application.", "Application archived.");
+        });
 
         document.getElementById("restore-btn")?.addEventListener("click", () =>
             apiAction(() => API.restoreApplication(id), "Failed to restore application.", "Application restored."));
